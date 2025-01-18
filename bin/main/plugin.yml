@@ -1,0 +1,5 @@
+name: ActiveBuilds
+version: '${version}'
+main: me.numilani.activebuilds.ActiveBuilds
+api-version: '1.20'
+depend: [BKCommonLib]

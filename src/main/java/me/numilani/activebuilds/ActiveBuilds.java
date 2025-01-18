@@ -1,6 +1,7 @@
 package me.numilani.activebuilds;
 
 import com.bergerkiller.bukkit.common.config.FileConfiguration;
+import java.sql.SQLException;
 import lombok.experimental.ExtensionMethod;
 import me.numilani.activebuilds.commands.BuildCommandHandler;
 import me.numilani.activebuilds.data.IDataSourceConnector;
@@ -15,92 +16,94 @@ import org.incendo.cloud.annotations.AnnotationParser;
 import org.incendo.cloud.execution.ExecutionCoordinator;
 import org.incendo.cloud.meta.SimpleCommandMeta;
 import org.incendo.cloud.paper.LegacyPaperCommandManager;
-import org.incendo.cloud.paper.PaperCommandManager;
-
-import java.sql.SQLException;
 
 @ExtensionMethod(ItemStackHelper.class)
 public final class ActiveBuilds extends JavaPlugin {
-//    public CloudSimpleHandler cmdHandler = new CloudSimpleHandler();
-    public LegacyPaperCommandManager<CommandSender> manager;
-    public AnnotationParser<CommandSender> cmdParser;
-    public ConfigurationContents cfg = new ConfigurationContents();
-    public IDataSourceConnector dataSource;
-    public BuildingService buildingService = new BuildingService(this);
+  public LegacyPaperCommandManager<CommandSender> manager;
+  public AnnotationParser<CommandSender> cmdParser;
+  public ConfigurationContents cfg = new ConfigurationContents();
+  public IDataSourceConnector dataSource;
+  public BuildingService buildingService = new BuildingService(this);
 
-    private BukkitTask checkIntervalTask;
+  private BukkitTask checkIntervalTask;
 
-    @Override
-    public void onEnable() {
-        // First run setup
-        var isFirstRun = false;
-        if (!(new FileConfiguration(this, "config.yml").exists())) {
-            isFirstRun = true;
-            doPluginInit();
-        }
-
-        loadConfig(false);
-
-        // do a check for datasourcetype once that's added to config
-        // for now, just set datasource to sqlite always
-        try {
-            dataSource = new SqliteDataSourceConnector(this);
-            if (isFirstRun) dataSource.initDatabase();
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-
-        // Register events
-//        getServer().getPluginManager().registerEvents();
-
-        // Register commands
-        try {
-            manager = LegacyPaperCommandManager.createNative(this, ExecutionCoordinator.simpleCoordinator());
-            cmdParser = new AnnotationParser<>(manager, CommandSender.class, parserParameters -> SimpleCommandMeta.empty());
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-
-        cmdParser.parse(new BuildCommandHandler(this));
-        
-        // auto-schedule event to run on the configured interval (20 ticks * 60 seconds per minute * checkInterval minutes)
-        var scheduler = getServer().getScheduler();
-        checkIntervalTask = scheduler.runTaskTimer(this, () -> {
-            try {
-                buildingService.runBuildingUpdate();
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
-        }, 20L, 20L * cfg.getCheckInterval() * 60L);
-
+  @Override
+  public void onEnable() {
+    // First run setup
+    var isFirstRun = false;
+    if (!(new FileConfiguration(this, "config.yml").exists())) {
+      isFirstRun = true;
+      doFirstRunPluginInit();
     }
 
-    public void loadConfig(boolean isReload) {
-        // store old cfg for if something goes wrong
-        var old_cfg = cfg;
-        // ensures cfg is cleared out
-        cfg = new ConfigurationContents();
-        var cfgFile = new FileConfiguration(this, "config.yml");
-        cfgFile.load();
+    loadConfig(false);
 
-        try{
-            cfg.setCheckInterval(cfgFile.get("settings.checkInterval", Integer.class));
-        }
-        catch (Exception ex){
-            getLogger().severe("Failure while loading config file! Is everything formatted correctly?");
-        }
+    initDataSource(isFirstRun);
+
+    initPluginCommands();
+
+    // auto-schedule event to run on the configured interval (20 ticks * 60 seconds
+    // per minute *
+    // checkInterval minutes)
+    var scheduler = getServer().getScheduler();
+    checkIntervalTask = scheduler.runTaskTimer(this, () -> {
+      try {
+        buildingService.runBuildingUpdate();
+      } catch (SQLException e) {
+        throw new RuntimeException(e);
+      }
+    }, 20L, 20L * cfg.getCheckInterval() * 60L);
+  }
+
+  public void loadConfig(boolean isReload) {
+    // store old cfg for if something goes wrong
+    var old_cfg = cfg;
+    try {
+      cfg = new ConfigurationContents();
+      var cfgFile = new FileConfiguration(this, "config.yml");
+      cfgFile.load();
+      cfg.setCheckInterval(cfgFile.get("settings.checkInterval", Integer.class));
+    } catch (Exception ex) {
+      getLogger().severe("Failure while loading config file! Is everything formatted correctly?");
+      cfg = old_cfg;
+    }
+  }
+
+  private void doFirstRunPluginInit() {
+    var cfgFile = new FileConfiguration(this, "config.yml");
+    cfgFile.set("settings.checkInterval", 90);
+
+    cfgFile.saveSync();
+  }
+
+  public void initDataSource(Boolean isFirstRun) {
+    // do a check for datasourcetype once that's added to config
+    // for now, just set datasource to sqlite always
+    try {
+      dataSource = new SqliteDataSourceConnector(this);
+      if (isFirstRun)
+        dataSource.initDatabase();
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  public void initPluginCommands() {
+    // Register commands
+    try {
+      manager = LegacyPaperCommandManager.createNative(this, ExecutionCoordinator.simpleCoordinator());
+      cmdParser = new AnnotationParser<>(
+          manager, CommandSender.class, parserParameters -> SimpleCommandMeta.empty());
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
 
-    private void doPluginInit() {
-        var cfgFile = new FileConfiguration(this, "config.yml");
-        cfgFile.set("settings.checkInterval", 90);
+    cmdParser.parse(new BuildCommandHandler(this));
+  }
 
-        cfgFile.saveSync();
-    }
-
-    @Override
-    public void onDisable() {
-        // Plugin shutdown logic
-        checkIntervalTask.cancel();
-    }
+  @Override
+  public void onDisable() {
+    // Plugin shutdown logic
+    checkIntervalTask.cancel();
+  }
 }

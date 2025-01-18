@@ -1,10 +1,12 @@
 package me.numilani.activebuilds.services;
 
 import me.numilani.activebuilds.ActiveBuilds;
+import org.bukkit.Material;
 import org.bukkit.block.Container;
 import org.bukkit.inventory.ItemStack;
 
 import java.sql.SQLException;
+import java.util.Hashtable;
 
 public class BuildingService {
     private ActiveBuilds plugin;
@@ -30,17 +32,27 @@ public class BuildingService {
             var inputChest = ((Container)bldg.InputLocation.getBlock().getState());
             var outputChest = ((Container)bldg.OutputLocation.getBlock().getState());
 
-            // if any inputs are missing, don't award outputs
-            var allInputsPresent = true;
-            for (var input : bldg.Type.getMaterialsConsumed())
+            // create map of items found in chest
+            Hashtable<ItemStack, Boolean> hasItems = new Hashtable<>();
+            for (var item : bldg.Type.getMaterialsConsumed()){
+                hasItems.put(item, false);
+            }
+
+            // check for all items present
+//            var allInputsPresent = true;
+
+            for (var input : hasItems.keySet())
             {
-                if (!inputChest.getInventory().contains(input)){
-                    allInputsPresent = false;
+                for (var inChest : inputChest.getInventory()){
+                    if (inChest != null && inChest.getType() == input.getType() && inChest.getAmount() <= input.getAmount())
+                    {
+                        hasItems.put(input, true);
+                    }
                 }
             }
 
             // if all inputs are present, take the inputs and give the outputs
-            if (allInputsPresent){
+            if (!hasItems.containsValue(false)){
                 for (var input : bldg.Type.getMaterialsConsumed())
                 {
                     inputChest.getInventory().removeItem(input);

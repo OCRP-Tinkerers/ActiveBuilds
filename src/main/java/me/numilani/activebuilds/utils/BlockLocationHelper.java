@@ -10,19 +10,18 @@ import java.util.UUID;
 
 public class BlockLocationHelper {
 
-    public static String getSerializedLocation(Location loc) { //Converts location -> String
+    public static String getSerializedLocation(Location loc) { 
         return loc.getX() + ";" + loc.getY() + ";" + loc.getZ() + ";" + loc.getWorld().getUID();
-        //feel free to use something to split them other than semicolons (Don't use periods or numbers)
     }
 
-    public static Location getDeserializedLocation(String s) {//Converts String -> Location
-        String [] parts = s.split(";"); //If you changed the semicolon you must change it here too
+    public static Location getDeserializedLocation(String s) {
+        String [] parts = s.split(";");
         double x = Double.parseDouble(parts[0]);
         double y = Double.parseDouble(parts[1]);
         double z = Double.parseDouble(parts[2]);
         UUID u = UUID.fromString(parts[3]);
         World w = Bukkit.getServer().getWorld(u);
-        return new Location(w, x, y, z); //can return null if the world no longer exists
+        return new Location(w, x, y, z); 
     }
 
     public static boolean hasSpaceFor(Inventory inv, ItemStack itemToAdd){
